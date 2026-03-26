@@ -1,0 +1,95 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────
+// Xアカウント（将来の複数アカウント対応込み）
+// ────────────────────────────────────────────
+model Account {
+  id             String    @id @default(cuid())
+  username       String    @unique               // @handle (例: yoji_x)
+  displayName    String
+  profileImage   String?
+  accessToken    String                          // 暗号化して保存
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  posts Post[]
+  logs  PostLog[]
+}
+
+// ────────────────────────────────────────────
+// 投稿
+// ────────────────────────────────────────────
+model Post {
+  id          String     @id @default(cuid())
+  content     String                            // 最大280文字チェックはアプリ側
+  mediaUrls   String[]   @default([])           // 画像URL（最大4枚）
+  scheduledAt DateTime?
+  status      PostStatus @default(DRAFT)
+  sortOrder   Int        @default(0)            // /schedule での並び順
+  batchId     String?                           // まとめ貼り付け時の同一バッチID
+  category    String?                           // カテゴリ（任意）
+  purpose     String?                           // 目的（任意）
+  priority    Int        @default(0)            // 優先度（任意、デフォルト0）
+  accountId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  account Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  logs    PostLog[]
+
+  @@index([status, scheduledAt])
+  @@index([batchId])
+  @@index([accountId])
+}
+
+// ────────────────────────────────────────────
+// 投稿ログ
+// ────────────────────────────────────────────
+model PostLog {
+  id         String    @id @default(cuid())
+  postId     String
+  accountId  String
+  status     LogStatus
+  xTweetId   String?                           // 成功時はXが返す tweet_id
+  errorCode  String?                           // HTTPステータスコード
+  errorBody  String?                           // APIレスポンス全文（JSON文字列）
+  retryCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([accountId])
+  @@index([createdAt])
+}
+
+// ────────────────────────────────────────────
+// Enum
+// ────────────────────────────────────────────
+enum PostStatus {
+  DRAFT       // インポート済み・未スケジュール
+  SCHEDULED   // 日時設定済み・投稿待ち
+  PUBLISHING  // ジョブ実行中（二重実行防止）
+  PUBLISHED   // 投稿成功
+  FAILED      // 最終失敗（リトライ上限超過）
+  CANCELLED   // キャンセル済み
+}
+
+enum LogStatus {
+  SUCCESS
+  FAILED
+  RETRYING
+}
