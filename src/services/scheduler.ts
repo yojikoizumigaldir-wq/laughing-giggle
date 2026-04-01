@@ -5,6 +5,7 @@
 
 import { prisma } from "@/src/lib/prisma";
 import { postTweet } from "./x-api/tweet";
+import { uploadMediaToX } from "./x-api/media";
 import { withRetry } from "@/src/lib/rate-limit";
 
 const MAX_RETRIES = 3;
@@ -82,15 +83,26 @@ export async function publishPost(postId: string): Promise<PublishResult> {
   let retryCount = 0;
 
   try {
+    // 画像がある場合は X にアップロードして media_id を取得する
+    const mediaIds: string[] = [];
+    if (post.mediaUrls.length > 0) {
+      for (const imageUrl of post.mediaUrls) {
+        const imgRes = await fetch(imageUrl);
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        const mimeType = imgRes.headers.get("content-type") ?? "image/jpeg";
+        const mediaId = await uploadMediaToX(buffer, mimeType);
+        mediaIds.push(mediaId);
+      }
+    }
+
+    const tweetPayload = {
+      text: post.content,
+      ...(mediaIds.length > 0 ? { media: { media_ids: mediaIds } } : {}),
+    };
+
     // OAuth 1.0a: 環境変数から直接トークンを使うため、accessToken引数は "oauth1a" とする
     const tweetId = await withRetry(
-      () =>
-        postTweet("oauth1a", {
-          text: post.content,
-          ...(post.mediaUrls.length > 0
-            ? { media: { media_ids: post.mediaUrls } }
-            : {}),
-        }),
+      () => postTweet("oauth1a", tweetPayload),
       { maxRetries: MAX_RETRIES }
     );
 

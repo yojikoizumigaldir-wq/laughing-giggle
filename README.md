@@ -39,6 +39,12 @@ cp .env.example .env.local
 | `ENCRYPTION_KEY` | トークン暗号化キー | `openssl rand -base64 32` |
 | `CRON_SECRET` | Cronエンドポイント保護 | 任意の文字列 |
 | `NEXT_PUBLIC_APP_URL` | アプリURL | デプロイ先URL |
+| `X_BEARER_TOKEN` | アカウント分析用 Bearer Token（任意） | X Developer Console → App → Bearer Token |
+
+> **`X_BEARER_TOKEN` について**
+> アカウント分析機能（`/analyze`）で X API からツイートを取得するために使います。
+> 未設定でも「デモデータ」または「CSV アップロード」で分析が可能です。
+> ⚠️ Free tier は月 500 リクエスト制限あり。`impression_count` は Basic tier 以上が必要な場合があります。
 
 ### 3. X Developer Console の設定
 
@@ -147,6 +153,75 @@ cron.schedule("* * * * *", async () => {
 | `/publish` | 予約済み投稿の確認・即時投稿 |
 | `/logs` | 投稿成功/失敗ログ一覧 |
 | `/accounts` | Xアカウント接続管理 |
+| `/analyze` | **アカウント分析・改善ルール自動生成** |
+
+---
+
+## アカウント分析機能（`/analyze`）
+
+Xアカウントの投稿傾向を分析し、次回投稿の改善ルールを自動生成します。
+
+### 使い方
+
+**モード1: X API（Bearer Token 設定済みの場合）**
+1. `.env.local` に `X_BEARER_TOKEN` を設定
+2. アカウントURL または `@username` を入力
+3. 「分析を実行」をクリック
+
+**モード2: CSV アップロード**
+```csv
+text,like_count,retweet_count,reply_count,quote_count,impression_count,bookmark_count
+投稿本文,100,20,5,3,5000,15
+```
+必須カラムは `text` のみ。メトリクスがあれば自動的に活用されます。
+
+**モード3: デモデータ**
+API キー不要。副業系サンプルデータ（15件）でそのまま試せます。
+
+### 出力内容
+
+- 全体傾向サマリー（文字数・行数・ハッシュタグ率など）
+- 上位30% vs 下位30% の構造比較
+- 勝ちパターン / 負けパターン
+- 投稿ルール / NG ルール
+- テスト仮説
+- **「最新学習ルール」テキスト（Claude Projectsの Instructionsにそのまま貼れる形式）**
+
+```
+# ■ 最新学習ルール（YYYY-MM-DD）
+強化：
+・ ...
+抑制：
+・ ...
+投稿ルール：
+・ ...
+NG：
+・ ...
+テスト：
+・ ...
+```
+
+### 分析ファイル構成
+
+```
+src/
+  types/analyze.ts              # 型定義
+  lib/twitterAnalyzer.ts        # X API クライアント（分析用）
+  lib/analyzer.ts               # 分析エンジン・ルール生成ロジック
+  app/api/analyze/
+    twitter/route.ts            # POST /api/analyze/twitter（X API取得）
+    run/route.ts                # POST /api/analyze/run（分析実行）
+  app/analyze/page.tsx          # 分析 UI
+```
+
+### 今後の拡張余地
+
+- CSVアップロード → 既に対応済み
+- 定期分析バッチ（Vercel Cron + DB 保存）
+- スケジューラー連携（分析結果から投稿文を自動生成）
+- 複数アカウント比較
+- 投稿カテゴリ分類（教育・共感・告知など）
+- メガルン/ギグミン専用テンプレート分析
 
 ---
 

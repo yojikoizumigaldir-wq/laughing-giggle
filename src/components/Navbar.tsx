@@ -9,6 +9,7 @@ import {
   Send,
   ScrollText,
   UserCircle2,
+  BarChart2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/publish", label: "投稿確認", icon: Send },
   { href: "/logs", label: "ログ", icon: ScrollText },
   { href: "/accounts", label: "アカウント", icon: UserCircle2 },
+  { href: "/analyze", label: "アカウント分析", icon: BarChart2 },
 ];
 
 export function Navbar() {
